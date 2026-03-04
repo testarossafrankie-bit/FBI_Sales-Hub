@@ -1,6 +1,6 @@
-import { sql } from "@vercel/postgres";
+const { sql } = require("@vercel/postgres");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
 
   try {
@@ -11,10 +11,12 @@ export default async function handler(req, res) {
         agent VARCHAR(50) NOT NULL,
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(50),
-        status VARCHAR(50) NOT NULL DEFAULT 'New Lead',
+        status VARCHAR(50) DEFAULT 'New Lead',
         notes TEXT,
         prev_premium VARCHAR(50),
+        prev_term VARCHAR(20),
         quoted_premium VARCHAR(50),
+        quoted_term VARCHAR(20),
         company VARCHAR(100),
         follow_up_date VARCHAR(20),
         follow_up_time VARCHAR(10),
@@ -51,6 +53,6 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("Setup error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message, stack: error.stack });
   }
-}
+};

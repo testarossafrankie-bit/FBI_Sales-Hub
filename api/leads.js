@@ -1,6 +1,6 @@
-import { sql } from "@vercel/postgres";
+const { sql } = require("@vercel/postgres");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -18,7 +18,6 @@ export default async function handler(req, res) {
         WHERE agent = ${agentKey}
         ORDER BY created_at DESC
       `;
-      // Convert DB rows to the frontend format
       const leads = rows.map(row => ({
         id: row.id,
         name: row.name,
@@ -26,7 +25,9 @@ export default async function handler(req, res) {
         status: row.status,
         notes: row.notes || "",
         prevPremium: row.prev_premium || "",
+        prevTerm: row.prev_term || "Monthly",
         quotedPremium: row.quoted_premium || "",
+        quotedTerm: row.quoted_term || "Monthly",
         company: row.company || "",
         followUpDate: row.follow_up_date || "",
         followUpTime: row.follow_up_time || "09:00"
@@ -37,13 +38,12 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const { leads } = req.body;
 
-      // Delete existing leads for this agent and insert new ones
       await sql`DELETE FROM leads WHERE agent = ${agentKey}`;
 
       for (const lead of leads) {
         await sql`
-          INSERT INTO leads (id, agent, name, phone, status, notes, prev_premium, quoted_premium, company, follow_up_date, follow_up_time)
-          VALUES (${lead.id}, ${agentKey}, ${lead.name}, ${lead.phone || null}, ${lead.status}, ${lead.notes || null}, ${lead.prevPremium || null}, ${lead.quotedPremium || null}, ${lead.company || null}, ${lead.followUpDate || null}, ${lead.followUpTime || null})
+          INSERT INTO leads (id, agent, name, phone, status, notes, prev_premium, prev_term, quoted_premium, quoted_term, company, follow_up_date, follow_up_time)
+          VALUES (${lead.id}, ${agentKey}, ${lead.name}, ${lead.phone || null}, ${lead.status}, ${lead.notes || null}, ${lead.prevPremium || null}, ${lead.prevTerm || 'Monthly'}, ${lead.quotedPremium || null}, ${lead.quotedTerm || 'Monthly'}, ${lead.company || null}, ${lead.followUpDate || null}, ${lead.followUpTime || null})
         `;
       }
 
@@ -55,4 +55,4 @@ export default async function handler(req, res) {
     console.error("Leads API error:", error);
     return res.status(500).json({ error: error.message });
   }
-}
+};

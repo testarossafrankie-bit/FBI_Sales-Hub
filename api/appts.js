@@ -1,6 +1,6 @@
-import { sql } from "@vercel/postgres";
+const { sql } = require("@vercel/postgres");
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -18,7 +18,6 @@ export default async function handler(req, res) {
         WHERE agent = ${agentKey}
         ORDER BY date DESC, start_time ASC
       `;
-      // Convert DB rows to the frontend format
       const appts = rows.map(row => ({
         id: row.id,
         title: row.title,
@@ -35,7 +34,6 @@ export default async function handler(req, res) {
     if (req.method === "POST") {
       const { appts } = req.body;
 
-      // Delete existing appointments for this agent and insert new ones
       await sql`DELETE FROM appointments WHERE agent = ${agentKey}`;
 
       for (const appt of appts) {
@@ -53,4 +51,4 @@ export default async function handler(req, res) {
     console.error("Appointments API error:", error);
     return res.status(500).json({ error: error.message });
   }
-}
+};

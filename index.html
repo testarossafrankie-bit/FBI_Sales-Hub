@@ -93,8 +93,16 @@ const fmtT   = (t)   => {
 };
 const toMin  = (t)   => { const[h,m]=t.split(":").map(Number); return h*60+m; };
 const toTime = (m)   => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const toAnnual = (amt, term) => {
+  const n = parseFloat((amt||"").replace(/[^0-9.]/g,""));
+  if(isNaN(n)) return NaN;
+  if(term==="Monthly") return n*12;
+  if(term==="6-Month") return n*2;
+  return n;
+};
 
-const DL = { name:"",phone:"",status:"New Lead",notes:"",prevPremium:"",quotedPremium:"",company:"",followUpDate:"",followUpTime:"09:00" };
+const PREMIUM_TERMS = ["Monthly","6-Month","Annual"];
+const DL = { name:"",phone:"",status:"New Lead",notes:"",prevPremium:"",prevTerm:"Monthly",quotedPremium:"",quotedTerm:"Monthly",company:"",followUpDate:"",followUpTime:"09:00" };
 const DA = { title:"",type:CONFIG.apptTypes[0],date:"",startTime:"09:00",endTime:"09:30",notes:"",linkedLeadId:"" };
 
 function App() {
@@ -481,9 +489,9 @@ function App() {
             {filtLeads.length===0&&<div style={{textAlign:"center",padding:"44px 0",fontFamily:"'Lato',sans-serif",color:"#bba0bb",fontSize:14}}>{leads.length===0?"No leads yet — click + New Lead to start!":"No leads match your search."}</div>}
             {filtLeads.map(l=>{
               const sc=STATUS_COLORS[l.status]||STATUS_COLORS["New Lead"];
-              const prev=parseFloat((l.prevPremium||"").replace(/[^0-9.]/g,""));
-              const quot=parseFloat((l.quotedPremium||"").replace(/[^0-9.]/g,""));
-              const savings=!isNaN(prev)&&!isNaN(quot)&&prev>quot?prev-quot:null;
+              const prevAnn=toAnnual(l.prevPremium,l.prevTerm);
+              const quotAnn=toAnnual(l.quotedPremium,l.quotedTerm);
+              const savings=!isNaN(prevAnn)&&!isNaN(quotAnn)&&prevAnn>quotAnn?prevAnn-quotAnn:null;
               return(
                 <div key={l.id} className="lr" onClick={()=>setSelLead(l)}>
                   <div style={{width:9,height:9,borderRadius:"50%",background:sc.dot,flexShrink:0}}/>
@@ -497,8 +505,8 @@ function App() {
                     {l.notes&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#9b6090",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.notes}</div>}
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
-                    {l.quotedPremium&&<div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:CONFIG.accent}}>{l.quotedPremium}</div>}
-                    {l.prevPremium&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#bba0bb",textDecoration:"line-through"}}>{l.prevPremium}</div>}
+                    {l.quotedPremium&&<div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:CONFIG.accent}}>{l.quotedPremium}<span style={{fontSize:9,fontWeight:400,color:"#9b6090",marginLeft:3}}>/{(l.quotedTerm||"Monthly").slice(0,2).toLowerCase()}</span></div>}
+                    {l.prevPremium&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#bba0bb",textDecoration:"line-through"}}>{l.prevPremium}/{(l.prevTerm||"Monthly").slice(0,2).toLowerCase()}</div>}
                   </div>
                 </div>
               );
@@ -562,9 +570,23 @@ function App() {
                 {LEAD_STATUSES.map(s=><option key={s}>{s}</option>)}
               </select>
             </div>
-            <div className="g2" style={{marginTop:13}}>
-              <div><label className="lbl">Previous Premium</label><input className="inp" placeholder="$1,200" value={lForm.prevPremium} onChange={e=>setLForm(f=>({...f,prevPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,prevPremium:f}))}}/></div>
-              <div><label className="lbl">Quoted Premium</label><input className="inp" placeholder="$980" value={lForm.quotedPremium} onChange={e=>setLForm(f=>({...f,quotedPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,quotedPremium:f}))}}/></div>
+            <div style={{marginTop:13}}>
+              <label className="lbl">Current Premium</label>
+              <div style={{display:"flex",gap:8}}>
+                <input className="inp" placeholder="$1,200" value={lForm.prevPremium} onChange={e=>setLForm(f=>({...f,prevPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,prevPremium:f}))}} style={{flex:1}}/>
+                <select className="inp" value={lForm.prevTerm||"Monthly"} onChange={e=>setLForm(f=>({...f,prevTerm:e.target.value}))} style={{width:110}}>
+                  {PREMIUM_TERMS.map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{marginTop:13}}>
+              <label className="lbl">Quoted Premium</label>
+              <div style={{display:"flex",gap:8}}>
+                <input className="inp" placeholder="$980" value={lForm.quotedPremium} onChange={e=>setLForm(f=>({...f,quotedPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,quotedPremium:f}))}} style={{flex:1}}/>
+                <select className="inp" value={lForm.quotedTerm||"Monthly"} onChange={e=>setLForm(f=>({...f,quotedTerm:e.target.value}))} style={{width:110}}>
+                  {PREMIUM_TERMS.map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{marginTop:13}}><label className="lbl">Quoted With</label>
               <select className="inp" value={lForm.company} onChange={e=>setLForm(f=>({...f,company:e.target.value}))}>
@@ -629,9 +651,9 @@ function App() {
       {/* ═══ LEAD DETAIL ═══ */}
       {selLead&&(()=>{
         const l=selLead, sc=STATUS_COLORS[l.status]||STATUS_COLORS["New Lead"];
-        const prev=parseFloat((l.prevPremium||"").replace(/[^0-9.]/g,""));
-        const quot=parseFloat((l.quotedPremium||"").replace(/[^0-9.]/g,""));
-        const savings=!isNaN(prev)&&!isNaN(quot)&&prev>quot?prev-quot:null;
+        const prevAnn=toAnnual(l.prevPremium,l.prevTerm);
+        const quotAnn=toAnnual(l.quotedPremium,l.quotedTerm);
+        const savings=!isNaN(prevAnn)&&!isNaN(quotAnn)&&prevAnn>quotAnn?prevAnn-quotAnn:null;
         return(
           <div className="mbg" onClick={e=>{if(e.target===e.currentTarget)setSelLead(null)}}>
             <div className="mo">
@@ -646,7 +668,7 @@ function App() {
                 <button className="bb" onClick={()=>setSelLead(null)} style={{background:"#f0daea",color:"#9b6090",padding:"4px 11px",fontSize:15,flexShrink:0}}>✕</button>
               </div>
               <div className="g2" style={{marginBottom:13}}>
-                {[{l:"Phone",v:l.phone||"—"},{l:"Follow-Up",v:l.followUpDate?`${l.followUpDate} · ${fmtT(l.followUpTime||"09:00")}`:"Not set"},{l:"Previous Premium",v:l.prevPremium||"—"},{l:"Quoted Premium",v:l.quotedPremium||"—"}].map(x=>(
+                {[{l:"Phone",v:l.phone||"—"},{l:"Follow-Up",v:l.followUpDate?`${l.followUpDate} · ${fmtT(l.followUpTime||"09:00")}`:"Not set"},{l:"Current Premium",v:l.prevPremium?`${l.prevPremium} (${l.prevTerm||"Monthly"})`:"—"},{l:"Quoted Premium",v:l.quotedPremium?`${l.quotedPremium} (${l.quotedTerm||"Monthly"})`:"—"}].map(x=>(
                   <div key={x.l} style={{background:"#fdf4f9",borderRadius:10,padding:"10px 13px"}}>
                     <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#9b6090",marginBottom:3}}>{x.l}</div>
                     <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,color:"#2d1b2e"}}>{x.v}</div>
