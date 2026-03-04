@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Move-Item ''files\\\\*'' ''.'' -Force; Remove-Item ''files'' -Recurse -ErrorAction SilentlyContinue; Remove-Item ''files.zip'' -ErrorAction SilentlyContinue\")",
+      "Bash(powershell -Command \"New-Item -ItemType Directory -Path ''public'' -Force; Move-Item -Path ''*.html'' -Destination ''public\\\\'' -Force; Remove-Item -Path ''leads.js'',''appts.js'',''admin.js'' -Force -ErrorAction SilentlyContinue\")",
+      "Bash(dir:*)",
+      "Bash(dir /b:*)",
+      "Bash(powershell:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

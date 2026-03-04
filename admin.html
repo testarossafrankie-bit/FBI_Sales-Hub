@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FBI Sales Hub — Admin</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Lato',sans-serif;background:linear-gradient(135deg,#1a0a2e,#2d1b4e);min-height:100vh;color:#fff}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const AGENTS = [
+  { key:"barbie", name:"Barbie", color:"#c06099" },
+  { key:"keith",  name:"Keith",  color:"#1e40af" },
+  { key:"dylan",  name:"Dylan",  color:"#0d9488" },
+  { key:"kelly",  name:"Kelly",  color:"#7c3aed" },
+  { key:"hali",   name:"Hali",   color:"#15803d" },
+  { key:"andrew", name:"Andrew", color:"#1e3a5f" },
+];
+
+const STATUS_COLORS = {
+  "New Lead":  { bg:"#e8f4fd", text:"#1a6fa8" },
+  "Quoted":    { bg:"#fff8e1", text:"#a07800" },
+  "Follow Up": { bg:"#fff3cd", text:"#856404" },
+  "Sold":      { bg:"#d4edda", text:"#155724" },
+  "Lost":      { bg:"#f8d7da", text:"#721c24" },
+  "No Answer": { bg:"#e2e3e5", text:"#383d41" },
+};
+
+const pad = n => String(n).padStart(2,"0");
+const fmtT = t => { if(!t) return ""; const [h,m]=t.split(":").map(Number); return `${h%12||12}:${pad(m)} ${h>=12?"PM":"AM"}`; };
+const today = new Date();
+const todayISO = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+
+function App() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab]         = useState("overview");
+  const [agentTab, setAgentTab] = useState("barbie");
+
+  useEffect(()=>{
+    fetch("/api/admin")
+      .then(r=>r.json())
+      .then(d=>{ setData(d); setLoading(false); })
+      .catch(()=>setLoading(false));
+  },[]);
+
+  const refresh = () => {
+    setLoading(true);
+    fetch("/api/admin").then(r=>r.json()).then(d=>{ setData(d); setLoading(false); });
+  };
+
+  if(loading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",flexDirection:"column",gap:16}}>
+      <div style={{fontSize:36}}>🌸</div>
+      <div style={{fontFamily:"'Playfair Display',serif",fontSize:20}}>Loading agent data...</div>
+    </div>
+  );
+
+  if(!data) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
+      <div style={{color:"#f87171",fontFamily:"'Lato',sans-serif"}}>Could not load data. Check your KV connection.</div>
+    </div>
+  );
+
+  // Compute totals
+  const totals = AGENTS.map(a => {
+    const leads = data[a.key]?.leads || [];
+    const appts = data[a.key]?.appts || [];
+    return {
+      ...a,
+      leads,
+      appts,
+      total: leads.length,
+      sold: leads.filter(l=>l.status==="Sold").length,
+      quoted: leads.filter(l=>l.status==="Quoted").length,
+      followUp: leads.filter(l=>l.status==="Follow Up").length,
+      overdue: leads.filter(l=>l.followUpDate && l.followUpDate < todayISO && l.status!=="Sold" && l.status!=="Lost").length,
+      todayAppts: appts.filter(a=>a.date===todayISO).length,
+    };
+  });
+
+  const grandTotal = {
+    leads: totals.reduce((s,a)=>s+a.total,0),
+    sold: totals.reduce((s,a)=>s+a.sold,0),
+    quoted: totals.reduce((s,a)=>s+a.quoted,0),
+    followUp: totals.reduce((s,a)=>s+a.followUp,0),
+    overdue: totals.reduce((s,a)=>s+a.overdue,0),
+  };
+
+  const curAgent = totals.find(a=>a.key===agentTab);
+
+  return (
+    <div style={{minHeight:"100vh"}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#4a0080,#8b00cc)",padding:"20px 24px",boxShadow:"0 4px 24px #0006"}}>
+        <div style={{maxWidth:1100,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+          <div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:700}}>👑 Admin Dashboard</div>
+            <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#e0b8ff",marginTop:2}}>Fred Beans Insurance · {today.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
+          </div>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <button onClick={refresh} style={{background:"#ffffff25",border:"1.5px solid #ffffff44",color:"#fff",borderRadius:8,padding:"7px 16px",fontFamily:"'Lato',sans-serif",fontWeight:700,cursor:"pointer",fontSize:13}}>🔄 Refresh</button>
+            <a href="/" style={{background:"#fff",color:"#4a0080",borderRadius:8,padding:"7px 16px",fontFamily:"'Lato',sans-serif",fontWeight:700,fontSize:13,textDecoration:"none"}}>🌸 My Hub</a>
+          </div>
+        </div>
+        {/* Grand totals */}
+        <div style={{maxWidth:1100,margin:"14px auto 0",display:"flex",gap:10,flexWrap:"wrap"}}>
+          {[{l:"Total Leads",v:grandTotal.leads,i:"👥"},{l:"Sold",v:grandTotal.sold,i:"✅"},{l:"Quoted",v:grandTotal.quoted,i:"📋"},{l:"Follow Ups",v:grandTotal.followUp,i:"📞"},{l:"Overdue",v:grandTotal.overdue,i:"⚠️"}].map(s=>(
+            <div key={s.l} style={{background:"#ffffff20",borderRadius:10,padding:"7px 16px",textAlign:"center",flex:"1 1 80px"}}>
+              <div style={{fontSize:16}}>{s.i}</div>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,lineHeight:1}}>{s.v}</div>
+              <div style={{fontFamily:"'Lato',sans-serif",fontSize:10,color:"#e0b8ff",marginTop:1}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{maxWidth:1100,margin:"0 auto",padding:20}}>
+        {/* Tabs */}
+        <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+          {[["overview","📊 Overview"],["agents","👤 By Agent"]].map(([t,l])=>(
+            <button key={t} onClick={()=>setTab(t)} style={{padding:"8px 20px",borderRadius:50,border:"none",cursor:"pointer",fontFamily:"'Lato',sans-serif",fontWeight:700,fontSize:13,background:tab===t?"#8b00cc":"#ffffff18",color:"#fff",transition:"all .15s"}}>{l}</button>
+          ))}
+        </div>
+
+        {/* OVERVIEW */}
+        {tab==="overview"&&(
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}>
+              {totals.map(a=>(
+                <div key={a.key} style={{background:"#ffffff10",borderRadius:16,padding:18,border:`2px solid ${a.color}44`,cursor:"pointer"}}
+                  onClick={()=>{setAgentTab(a.key);setTab("agents");}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+                    <div style={{width:44,height:44,borderRadius:"50%",background:a.color,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700}}>{a.name[0]}</div>
+                    <div>
+                      <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>{a.name}</div>
+                      <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#c0a0e0"}}>{a.total} leads · {a.todayAppts} appts today</div>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                    {[{l:"Sold",v:a.sold,c:"#28a745"},{l:"Quoted",v:a.quoted,c:"#f5c400"},{l:"Follow Up",v:a.followUp,c:"#fd7e14"},{l:"Overdue",v:a.overdue,c:"#dc3545"}].map(s=>(
+                      <div key={s.l} style={{background:"#ffffff10",borderRadius:8,padding:"6px 4px",textAlign:"center"}}>
+                        <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,color:s.c}}>{s.v}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,color:"#c0a0e0"}}>{s.l}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* All overdue across all agents */}
+            {grandTotal.overdue > 0 && (
+              <div style={{marginTop:24}}>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,marginBottom:12,color:"#f87171"}}>⚠️ Overdue Follow-Ups ({grandTotal.overdue})</div>
+                {totals.map(a=>
+                  a.leads.filter(l=>l.followUpDate && l.followUpDate < todayISO && l.status!=="Sold" && l.status!=="Lost").map(l=>(
+                    <div key={l.id} style={{background:"#ffffff10",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:12,alignItems:"center",border:"1.5px solid #f8717144"}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:a.color,flexShrink:0}}/>
+                      <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#e0b8ff",minWidth:55}}>{a.name}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700}}>{l.name}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#c0a0e0"}}>{l.phone} · Due {l.followUpDate}</div>
+                      </div>
+                      <span style={{fontSize:10,padding:"2px 8px",borderRadius:50,background:STATUS_COLORS[l.status]?.bg,color:STATUS_COLORS[l.status]?.text,fontFamily:"'Lato',sans-serif",fontWeight:700}}>{l.status}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* BY AGENT */}
+        {tab==="agents"&&(
+          <div>
+            <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
+              {totals.map(a=>(
+                <button key={a.key} onClick={()=>setAgentTab(a.key)}
+                  style={{padding:"7px 16px",borderRadius:50,border:`2px solid ${a.color}`,cursor:"pointer",fontFamily:"'Lato',sans-serif",fontWeight:700,fontSize:12,background:agentTab===a.key?a.color:"transparent",color:"#fff",transition:"all .15s"}}>
+                  {a.name} ({a.total})
+                </button>
+              ))}
+            </div>
+
+            {curAgent && (
+              <div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
+                  {[{l:"Total Leads",v:curAgent.total,i:"👥"},{l:"Sold",v:curAgent.sold,i:"✅"},{l:"Quoted",v:curAgent.quoted,i:"📋"},{l:"Follow Up",v:curAgent.followUp,i:"📞"},{l:"Overdue",v:curAgent.overdue,i:"⚠️"},{l:"Today's Appts",v:curAgent.todayAppts,i:"📅"}].map(s=>(
+                    <div key={s.l} style={{background:"#ffffff10",borderRadius:12,padding:"12px",textAlign:"center",border:`1.5px solid ${curAgent.color}44`}}>
+                      <div style={{fontSize:18}}>{s.i}</div>
+                      <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,color:curAgent.color}}>{s.v}</div>
+                      <div style={{fontFamily:"'Lato',sans-serif",fontSize:10,color:"#c0a0e0"}}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,marginBottom:10,color:curAgent.color}}>{curAgent.name}'s Leads</div>
+                {curAgent.leads.length===0 && <div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#c0a0e0",padding:"20px 0"}}>No leads yet.</div>}
+                {curAgent.leads.map(l=>{
+                  const sc = STATUS_COLORS[l.status]||STATUS_COLORS["New Lead"];
+                  const prev=parseFloat((l.prevPremium||"").replace(/[^0-9.]/g,""));
+                  const quot=parseFloat((l.quotedPremium||"").replace(/[^0-9.]/g,""));
+                  const savings=!isNaN(prev)&&!isNaN(quot)&&prev>quot?prev-quot:null;
+                  return(
+                    <div key={l.id} style={{background:"#ffffff08",borderRadius:10,padding:"11px 14px",marginBottom:7,display:"flex",gap:12,alignItems:"center",border:"1.5px solid #ffffff15"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700}}>{l.name}</span>
+                          <span style={{fontSize:10,padding:"2px 8px",borderRadius:50,background:sc.bg,color:sc.text,fontFamily:"'Lato',sans-serif",fontWeight:700}}>{l.status}</span>
+                          {savings&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:50,background:"#d4edda",color:"#155724",fontFamily:"'Lato',sans-serif",fontWeight:700}}>💰 ${Math.round(savings).toLocaleString()}/yr</span>}
+                        </div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#c0a0e0",marginTop:2}}>{l.phone}{l.company?` · ${l.company}`:""}{l.followUpDate?` · 📅 ${l.followUpDate}`:""}</div>
+                      </div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        {l.quotedPremium&&<div style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:700,color:curAgent.color}}>{l.quotedPremium}</div>}
+                        {l.prevPremium&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#888",textDecoration:"line-through"}}>{l.prevPremium}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {curAgent.appts.length > 0 && (
+                  <div style={{marginTop:20}}>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,marginBottom:10,color:curAgent.color}}>{curAgent.name}'s Appointments</div>
+                    {curAgent.appts.sort((a,b)=>a.date.localeCompare(b.date)).map(a=>(
+                      <div key={a.id} style={{background:"#ffffff08",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",gap:10,alignItems:"center",border:"1.5px solid #ffffff15"}}>
+                        <div style={{minWidth:70,fontFamily:"'Lato',sans-serif",fontSize:11,color:"#c0a0e0"}}>{a.date}<br/>{fmtT(a.startTime)}</div>
+                        <div style={{flex:1}}>
+                          <div style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:700}}>{a.title}</div>
+                          <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#c0a0e0"}}>{a.type}</div>
+                        </div>
+                        {a.date===todayISO&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:50,background:"#c06099",color:"#fff",fontFamily:"'Lato',sans-serif",fontWeight:700}}>TODAY</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
