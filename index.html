@@ -31,8 +31,7 @@ const CONFIG = {
     "AMIG","Manhattan Life","Personalumbrella.com","Other"
   ],
   apptTypes: [
-    "Customer Call","Follow Up Call","Quote Review","Policy Delivery",
-    "Team Meeting","Training","Lunch Break","Personal","Other"
+    "New Lead","X-Date","Sale Follow Up","Service Follow Up","Onboarding/UW","Other"
   ],
 };
 
@@ -67,9 +66,16 @@ const APPT_PALETTE = [
   { bg:"#edfaf4", text:"#1a6040", border:"#80d4aa" },
 ];
 
+const APPT_COLORS = {
+  "New Lead":        { bg:"#fff59d", text:"#7a6200", border:"#ffd600" },
+  "Sale Follow Up":  { bg:"#e0f0ff", text:"#1a5fb4", border:"#99c9ff" },
+  "X-Date":          { bg:"#e0e8ff", text:"#3a4faa", border:"#a0b0f0" },
+  "Service Follow Up":{ bg:"#d4f5e0", text:"#1a7a4a", border:"#7ddcab" },
+  "Onboarding/UW":   { bg:"#d4f5e0", text:"#1a7a4a", border:"#7ddcab" },
+  "Other":           { bg:"#f0ede8", text:"#5a4a2e", border:"#c4b490" },
+};
 const apptColor = (type) => {
-  const idx = CONFIG.apptTypes.indexOf(type);
-  return APPT_PALETTE[Math.max(0,idx) % APPT_PALETTE.length];
+  return APPT_COLORS[type] || APPT_COLORS["Other"];
 };
 const fmtPhone = (v) => {
   const d=v.replace(/\D/g,"").slice(0,10);
