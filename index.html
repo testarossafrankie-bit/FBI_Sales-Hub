@@ -26,9 +26,9 @@ const CONFIG = {
   accent: "#7c3aed",
   tint: "#f5f3ff",
   companies: [
-    "Progressive","Travelers","Nationwide","Allstate","State Farm",
-    "GEICO","Liberty Mutual","Safeco","Bristol West","Dairyland",
-    "The General","Kemper","MetLife","Erie","Encompass","Other"
+    "Travelers","Safeco","Safeco-E","Nationwide","NatGen 360","NatGenValue",
+    "Progressive","Geico","Bristol West","Glacier","Openly","Foremost",
+    "AMIG","Manhattan Life","Personalumbrella.com","Other"
   ],
   apptTypes: [
     "Customer Call","Follow Up Call","Quote Review","Policy Delivery",
@@ -201,8 +201,10 @@ function App() {
   const upcoming = [
     ...leads.filter(l=>l.followUpDate).map(l=>({kind:"lead",date:l.followUpDate,time:l.followUpTime||"09:00",label:l.name,sub:l.phone,status:l.status,obj:l})),
     ...appts.map(a=>({kind:"appt",date:a.date,time:a.startTime,label:a.title,sub:a.type,type:a.type,obj:a})),
-  ].filter(x=>{ const d=new Date(x.date+"T12:00:00"); const df=(d-now)/86400000; return df>=-0.5&&df<=upcomingFilter; })
-   .sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  ].filter(x=>{
+    if(upcomingFilter===0) return x.date===todayISO;
+    const d=new Date(x.date+"T12:00:00"); const df=(d-now)/86400000; return df>=-0.5&&df<=upcomingFilter;
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
   const weekDates = Array.from({length:7},(_,i)=>{ const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return iso(d.getFullYear(),d.getMonth(),d.getDate()); });
   const prevWeek = ()=>{ const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()-7); setWeekStart(iso(d.getFullYear(),d.getMonth(),d.getDate())); };
   const nextWeek = ()=>{ const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+7); setWeekStart(iso(d.getFullYear(),d.getMonth(),d.getDate())); };
