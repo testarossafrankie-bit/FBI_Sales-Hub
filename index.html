@@ -311,10 +311,12 @@ function SalesHub({ agent, onLogout }) {
 
   useEffect(()=>{
     loadData();
-    const onFocus = () => loadData();
+    const onFocus = () => {
+      if(!showAF && !showLF && !selAppt && !selLead) loadData();
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  },[loadData]);
+  },[loadData, showAF, showLF, selAppt, selLead]);
 
   useEffect(()=>{ if(!saveEnabled) return; const t = setTimeout(()=>{ fetch(`/api/leads?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[leads, saveEnabled]);
   useEffect(()=>{ if(!saveEnabled) return; const t = setTimeout(()=>{ fetch(`/api/appts?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appts})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[appts, saveEnabled]);
