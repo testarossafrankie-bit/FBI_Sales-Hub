@@ -1,4 +1,4 @@
-const { sql } = require("@vercel/postgres");
+const { kv } = require("@vercel/kv");
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -9,44 +9,17 @@ module.exports = async function handler(req, res) {
   const { agent } = req.query;
   if (!agent) return res.status(400).json({ error: "agent required" });
 
-  const agentKey = agent.toLowerCase();
+  const key = `leads:${agent.toLowerCase()}`;
 
   try {
     if (req.method === "GET") {
-      const { rows } = await sql`
-        SELECT * FROM leads
-        WHERE agent = ${agentKey}
-        ORDER BY created_at DESC
-      `;
-      const leads = rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        phone: row.phone || "",
-        status: row.status,
-        notes: row.notes || "",
-        prevPremium: row.prev_premium || "",
-        prevTerm: row.prev_term || "Monthly",
-        quotedPremium: row.quoted_premium || "",
-        quotedTerm: row.quoted_term || "Monthly",
-        company: row.company || "",
-        followUpDate: row.follow_up_date || "",
-        followUpTime: row.follow_up_time || "09:00"
-      }));
-      return res.status(200).json(leads);
+      const data = await kv.get(key);
+      return res.status(200).json(data || []);
     }
 
     if (req.method === "POST") {
       const { leads } = req.body;
-
-      await sql`DELETE FROM leads WHERE agent = ${agentKey}`;
-
-      for (const lead of leads) {
-        await sql`
-          INSERT INTO leads (id, agent, name, phone, status, notes, prev_premium, prev_term, quoted_premium, quoted_term, company, follow_up_date, follow_up_time)
-          VALUES (${lead.id}, ${agentKey}, ${lead.name}, ${lead.phone || null}, ${lead.status}, ${lead.notes || null}, ${lead.prevPremium || null}, ${lead.prevTerm || 'Monthly'}, ${lead.quotedPremium || null}, ${lead.quotedTerm || 'Monthly'}, ${lead.company || null}, ${lead.followUpDate || null}, ${lead.followUpTime || null})
-        `;
-      }
-
+      await kv.set(key, leads);
       return res.status(200).json({ ok: true });
     }
 
