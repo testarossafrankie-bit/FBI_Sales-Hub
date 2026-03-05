@@ -26,13 +26,12 @@ const CONFIG = {
   accent: "#1e40af",
   tint: "#eff6ff",
   companies: [
-    "Progressive","Travelers","Nationwide","Allstate","State Farm",
-    "GEICO","Liberty Mutual","Safeco","Bristol West","Dairyland",
-    "The General","Kemper","MetLife","Erie","Encompass","Other"
+    "Travelers","Safeco","Safeco-E","Nationwide","NatGen 360","NatGenValue",
+    "Progressive","Geico","Bristol West","Glacier","Openly","Foremost",
+    "AMIG","Manhattan Life","Personalumbrella.com","Other"
   ],
   apptTypes: [
-    "Customer Call","Follow Up Call","Quote Review","Policy Delivery",
-    "Team Meeting","Training","Lunch Break","Personal","Other"
+    "New Lead","X-Date","Sale Follow Up","Service Follow Up","Onboarding/UW","Other"
   ],
 };
 
@@ -67,9 +66,16 @@ const APPT_PALETTE = [
   { bg:"#edfaf4", text:"#1a6040", border:"#80d4aa" },
 ];
 
+const APPT_COLORS = {
+  "New Lead":        { bg:"#fff59d", text:"#7a6200", border:"#ffd600" },
+  "Sale Follow Up":  { bg:"#e0f0ff", text:"#1a5fb4", border:"#99c9ff" },
+  "X-Date":          { bg:"#e0e8ff", text:"#3a4faa", border:"#a0b0f0" },
+  "Service Follow Up":{ bg:"#d4f5e0", text:"#1a7a4a", border:"#7ddcab" },
+  "Onboarding/UW":   { bg:"#d4f5e0", text:"#1a7a4a", border:"#7ddcab" },
+  "Other":           { bg:"#f0ede8", text:"#5a4a2e", border:"#c4b490" },
+};
 const apptColor = (type) => {
-  const idx = CONFIG.apptTypes.indexOf(type);
-  return APPT_PALETTE[Math.max(0,idx) % APPT_PALETTE.length];
+  return APPT_COLORS[type] || APPT_COLORS["Other"];
 };
 const fmtPhone = (v) => {
   const d=v.replace(/\D/g,"").slice(0,10);
@@ -93,8 +99,16 @@ const fmtT   = (t)   => {
 };
 const toMin  = (t)   => { const[h,m]=t.split(":").map(Number); return h*60+m; };
 const toTime = (m)   => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const toAnnual = (amt, term) => {
+  const n = parseFloat((amt||"").replace(/[^0-9.]/g,""));
+  if(isNaN(n)) return NaN;
+  if(term==="Monthly") return n*12;
+  if(term==="6-Month") return n*2;
+  return n;
+};
 
-const DL = { name:"",phone:"",status:"New Lead",notes:"",prevPremium:"",quotedPremium:"",company:"",followUpDate:"",followUpTime:"09:00" };
+const PREMIUM_TERMS = ["Monthly","6-Month","Annual"];
+const DL = { name:"",phone:"",status:"New Lead",notes:"",prevPremium:"",prevTerm:"Monthly",quotedPremium:"",quotedTerm:"Monthly",company:"",followUpDate:"",followUpTime:"09:00" };
 const DA = { title:"",type:CONFIG.apptTypes[0],date:"",startTime:"09:00",endTime:"09:30",notes:"",linkedLeadId:"" };
 
 function App() {
@@ -117,6 +131,8 @@ function App() {
   const [toast,  setToast]  = useState(null);
   const [lErr,   setLErr]   = useState("");
   const [aErr,   setAErr]   = useState("");
+  const [upcomingFilter, setUpcomingFilter] = useState(7);
+  const [weekStart, setWeekStart] = useState(()=>{ const d=new Date(); d.setDate(d.getDate()-d.getDay()); return iso(d.getFullYear(),d.getMonth(),d.getDate()); });
   const scrollRef = useRef(null);
   const now = new Date();
   const todayISO = iso(now.getFullYear(), now.getMonth(), now.getDate());
@@ -160,7 +176,7 @@ function App() {
   const saveLead = () => {
     if(!lForm.name.trim()){setLErr("Customer name is required.");return;}
     if(editLId){ setLeads(ls=>ls.map(l=>l.id===editLId?{...lForm,id:editLId}:l)); toast2("Lead updated!"); }
-    else { setLeads(ls=>[{...lForm,id:Date.now().toString()},...ls]); toast2("Lead added! 🌸"); }
+    else { setLeads(ls=>[{...lForm,id:Date.now().toString()},...ls]); toast2("Lead added! 🎯"); }
     setShowLF(false); setEditLId(null); setLForm(DL);
   };
   const delLead = (id) => { setLeads(ls=>ls.filter(l=>l.id!==id)); setSelLead(null); toast2("Lead removed.","info"); };
@@ -191,8 +207,14 @@ function App() {
   const upcoming = [
     ...leads.filter(l=>l.followUpDate).map(l=>({kind:"lead",date:l.followUpDate,time:l.followUpTime||"09:00",label:l.name,sub:l.phone,status:l.status,obj:l})),
     ...appts.map(a=>({kind:"appt",date:a.date,time:a.startTime,label:a.title,sub:a.type,type:a.type,obj:a})),
-  ].filter(x=>{ const d=new Date(x.date+"T12:00:00"); const df=(d-now)/86400000; return df>=-0.5&&df<=7; })
-   .sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  ].filter(x=>{
+    if(upcomingFilter===0) return x.date===todayISO;
+    const d=new Date(x.date+"T12:00:00"); const df=(d-now)/86400000; return df>=-0.5&&df<=upcomingFilter;
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  const weekDates = Array.from({length:7},(_,i)=>{ const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return iso(d.getFullYear(),d.getMonth(),d.getDate()); });
+  const prevWeek = ()=>{ const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()-7); setWeekStart(iso(d.getFullYear(),d.getMonth(),d.getDate())); };
+  const nextWeek = ()=>{ const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+7); setWeekStart(iso(d.getFullYear(),d.getMonth(),d.getDate())); };
+  const goThisWeek = ()=>{ const d=new Date(); d.setDate(d.getDate()-d.getDay()); setWeekStart(iso(d.getFullYear(),d.getMonth(),d.getDate())); };
   const filtLeads=leads.filter(l=>{
     const q=search.toLowerCase();
     return(!q||l.name.toLowerCase().includes(q)||l.phone.includes(q)||(l.company||"").toLowerCase().includes(q))&&(fStat==="All"||l.status===fStat);
@@ -208,54 +230,54 @@ function App() {
   /* ── Shared styles as a string injected via <style> ── */
   const CSS = `
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Lato',sans-serif;background:linear-gradient(135deg,${CONFIG.tint} 0%,#f8e8f5 50%,${CONFIG.tint} 100%);min-height:100vh}
+    body{font-family:'Lato',sans-serif;background:linear-gradient(135deg,${CONFIG.tint} 0%,#e8f0f8 50%,${CONFIG.tint} 100%);min-height:100vh}
     .bb{cursor:pointer;border:none;border-radius:8px;font-family:'Lato',sans-serif;font-weight:700;letter-spacing:.03em;transition:all .15s}
     .bb:hover{filter:brightness(1.07);transform:translateY(-1px)} .bb:active{transform:translateY(0)}
-    .inp{width:100%;padding:9px 13px;border:1.5px solid #e0c8db;border-radius:8px;font-family:'Lato',sans-serif;font-size:14px;background:#fff;color:#2d1b2e;outline:none;transition:border .15s}
+    .inp{width:100%;padding:9px 13px;border:1.5px solid #c8d8e8;border-radius:8px;font-family:'Lato',sans-serif;font-size:14px;background:#fff;color:#1e3a5f;outline:none;transition:border .15s}
     .inp:focus{border-color:${ac};box-shadow:0 0 0 2px ${ac}22}
-    .inp::placeholder{color:#bba0bb}
-    select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%239b6090' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
-    .lbl{font-family:'Lato',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9b6090;margin-bottom:5px;display:block}
-    .cd{border-radius:8px;min-height:80px;padding:5px;cursor:pointer;transition:background .12s;border:1.5px solid transparent}
-    .cd:hover{background:#f9eaf6!important;border-color:#e0aed4} .cd.tod{border-color:${ac}!important}
-    .mbg{position:fixed;inset:0;background:#2d1b2e88;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
-    .mo{background:#fff;border-radius:18px;padding:28px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px #2d1b2e44}
+    .inp::placeholder{color:#90a0b8}
+    select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%231e40af' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+    .lbl{font-family:'Lato',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a7090;margin-bottom:5px;display:block}
+    .cd{border-radius:8px;min-height:100px;padding:6px;cursor:pointer;transition:background .12s;border:1.5px solid transparent}
+    .cd:hover{background:#eef4fa!important;border-color:#a0c0e0} .cd.tod{border-color:${ac}!important}
+    .mbg{position:fixed;inset:0;background:#1e3a5f88;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+    .mo{background:#fff;border-radius:18px;padding:28px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px #1e3a5f44}
     .tst{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 24px;border-radius:50px;font-family:'Lato',sans-serif;font-size:14px;font-weight:700;z-index:999;box-shadow:0 4px 20px #0003;animation:su .25s ease}
     @keyframes su{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
     .tb{padding:9px 18px;border-radius:50px;font-family:'Lato',sans-serif;font-size:13px;font-weight:700;border:none;cursor:pointer;transition:all .15s}
-    .lr{padding:12px 16px;border-radius:10px;background:#fff;margin-bottom:8px;cursor:pointer;border:1.5px solid #f0daea;transition:all .13s;display:flex;align-items:center;gap:12px}
+    .lr{padding:12px 16px;border-radius:10px;background:#fff;margin-bottom:8px;cursor:pointer;border:1.5px solid #d0e0f0;transition:all .13s;display:flex;align-items:center;gap:12px}
     .lr:hover{border-color:${ac};box-shadow:0 2px 8px ${ac}22;transform:translateY(-1px)}
     .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     @media(max-width:480px){.g2{grid-template-columns:1fr}}
-    .hr{display:flex;min-height:52px;border-top:1px solid #f0e0ec}
-    .hl{width:52px;flex-shrink:0;padding:4px 6px 0 0;text-align:right;font-family:'Lato',sans-serif;font-size:10px;color:#cca8c0;font-weight:700}
+    .hr{display:flex;min-height:52px;border-top:1px solid #e0ecf4}
+    .hl{width:52px;flex-shrink:0;padding:4px 6px 0 0;text-align:right;font-family:'Lato',sans-serif;font-size:10px;color:#a0b0c8;font-weight:700}
     .hs{flex:1;position:relative;min-height:52px;cursor:pointer;border-radius:0 6px 6px 0;transition:background .1s}
-    .hs:hover{background:#fdf0fb}
+    .hs:hover{background:#f0f6fc}
     .ab{position:absolute;left:3px;right:3px;border-radius:7px;padding:3px 7px;font-family:'Lato',sans-serif;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid;overflow:hidden;z-index:2;transition:filter .12s}
     .ab:hover{filter:brightness(.95)}
     .ds{overflow-y:auto;max-height:520px}
-    .ds::-webkit-scrollbar{width:4px} .ds::-webkit-scrollbar-track{background:#f9eaf6} .ds::-webkit-scrollbar-thumb{background:#e0aed4;border-radius:4px}
+    .ds::-webkit-scrollbar{width:4px} .ds::-webkit-scrollbar-track{background:#f0f6fc} .ds::-webkit-scrollbar-thumb{background:#a0c0e0;border-radius:4px}
     .ui{display:flex;align-items:flex-start;gap:10px;padding:8px 11px;border-radius:9px;margin-bottom:6px;cursor:pointer;transition:filter .12s}
     .ui:hover{filter:brightness(.97)}
     .cp{font-size:10px;font-family:'Lato',sans-serif;font-weight:700;border-radius:4px;padding:1px 5px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;border:1px solid transparent;display:block}
-    .card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 2px 16px ${ac}18;border:1.5px solid #f0daea}
-    .scard{background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 12px ${ac}14;border:1.5px solid #f0daea}
+    .card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 2px 16px ${ac}18;border:1.5px solid #d0e0f0}
+    .scard{background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 12px ${ac}14;border:1.5px solid #d0e0f0}
     .pf{fontFamily:'Playfair Display',serif}
   `;
 
   return (
-    <div style={{fontFamily:"'Lato',sans-serif",minHeight:"100vh",color:"#2d1b2e"}}>
+    <div style={{fontFamily:"'Lato',sans-serif",minHeight:"100vh",color:"#1e3a5f"}}>
       <style>{CSS}</style>
 
       {/* ── HEADER ── */}
       <div style={{background:headerGrad,padding:"18px 20px 14px",boxShadow:`0 4px 20px ${CONFIG.colorFrom}44`}}>
-        <div style={{maxWidth:1050,margin:"0 auto"}}>
+        <div style={{maxWidth:1200,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
             <div>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#fff"}}>
-                🌸 {CONFIG.agentName}'s Sales Hub
+                🎯 {CONFIG.agentName}'s Sales Hub
               </div>
-              <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#fce4f6",marginTop:2}}>
+              <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#bfd4f0",marginTop:2}}>
                 {CONFIG.company} · {now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
               </div>
             </div>
@@ -270,7 +292,7 @@ function App() {
               <div key={s.l} style={{background:"#ffffff25",borderRadius:10,padding:"6px 12px",flex:"1 1 60px",minWidth:60,textAlign:"center"}}>
                 <div style={{fontSize:14}}>{s.i}</div>
                 <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,color:"#fff",lineHeight:1}}>{s.v}</div>
-                <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,color:"#fce4f6",marginTop:1}}>{s.l}</div>
+                <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,color:"#bfd4f0",marginTop:1}}>{s.l}</div>
               </div>
             ))}
           </div>
@@ -278,25 +300,25 @@ function App() {
       </div>
 
       {/* ── TABS ── */}
-      <div style={{maxWidth:1050,margin:"0 auto",padding:"13px 16px 0"}}>
-        <div style={{display:"flex",gap:5,background:"#f0daea",borderRadius:50,padding:4,width:"fit-content"}}>
-          {[["calendar","📅 Calendar"],["day","🗓 Day View"],["leads","📋 All Leads"]].map(([t,label])=>(
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"13px 16px 0"}}>
+        <div style={{display:"flex",gap:5,background:"#d0e0f0",borderRadius:50,padding:4,width:"fit-content"}}>
+          {[["calendar","📅 Month"],["week","📆 Week"],["day","🗓 Day"],["leads","📋 Leads"]].map(([t,label])=>(
             <button key={t} className="tb" onClick={()=>{ setTab(t); if(t==="day"&&!dayView)setDayView(todayISO); }}
-              style={{background:tab===t?CONFIG.accent:"transparent",color:tab===t?"#fff":"#9b6090"}}>{label}</button>
+              style={{background:tab===t?CONFIG.accent:"transparent",color:tab===t?"#fff":"#5a7090"}}>{label}</button>
           ))}
         </div>
       </div>
 
-      <div style={{maxWidth:1050,margin:"0 auto",padding:16}}>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:16}}>
 
         {/* ═══════════ CALENDAR TAB ═══════════ */}
         {tab==="calendar"&&(
-          <div style={{display:"grid",gridTemplateColumns:"1fr 285px",gap:16,alignItems:"start"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:16,alignItems:"start"}}>
             <div className="card">
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                <button className="bb" onClick={()=>setCalDate(new Date(yr,mo-1,1))} style={{background:"#fdf4f9",color:CONFIG.accent,padding:"5px 13px",fontSize:16}}>‹</button>
+                <button className="bb" onClick={()=>setCalDate(new Date(yr,mo-1,1))} style={{background:"#eff6ff",color:CONFIG.accent,padding:"5px 13px",fontSize:16}}>‹</button>
                 <div style={{fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:700,color:CONFIG.accent}}>{MONTHS[mo]} {yr}</div>
-                <button className="bb" onClick={()=>setCalDate(new Date(yr,mo+1,1))} style={{background:"#fdf4f9",color:CONFIG.accent,padding:"5px 13px",fontSize:16}}>›</button>
+                <button className="bb" onClick={()=>setCalDate(new Date(yr,mo+1,1))} style={{background:"#eff6ff",color:CONFIG.accent,padding:"5px 13px",fontSize:16}}>›</button>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
                 {DAYS_S.map(d=><div key={d} style={{textAlign:"center",fontFamily:"'Lato',sans-serif",fontSize:10,fontWeight:700,letterSpacing:".06em",color:CONFIG.accent,padding:"3px 0"}}>{d}</div>)}
@@ -309,9 +331,9 @@ function App() {
                   const isToday=isoD===todayISO;
                   const total=dl.length+da.length;
                   return(
-                    <div key={d} className={`cd${isToday?" tod":""}`} style={{background:isToday?"#fdf0fb":"#fafafa"}}
+                    <div key={d} className={`cd${isToday?" tod":""}`} style={{background:isToday?"#eff6ff":"#fafafa"}}
                       onClick={()=>{setDayView(isoD);setTab("day");}}>
-                      <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,fontWeight:isToday?700:400,color:isToday?CONFIG.accent:"#5a3a5a",marginBottom:2}}>{d}</div>
+                      <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,fontWeight:isToday?700:400,color:isToday?CONFIG.accent:"#3a5a7a",marginBottom:2}}>{d}</div>
                       {da.slice(0,2).map(a=>{ const c=apptColor(a.type); return(
                         <div key={a.id} className="cp" style={{background:c.bg,color:c.text,borderColor:c.border}}
                           onClick={e=>{e.stopPropagation();setSelAppt(a);}}>
@@ -324,7 +346,7 @@ function App() {
                           📞 {l.name.split(" ")[0]}
                         </div>
                       ))}
-                      {total>3&&<div style={{fontSize:9,color:"#9b6090",fontFamily:"'Lato',sans-serif"}}>+{total-3}</div>}
+                      {total>3&&<div style={{fontSize:9,color:"#5a7090",fontFamily:"'Lato',sans-serif"}}>+{total-3}</div>}
                     </div>
                   );
                 })}
@@ -334,22 +356,29 @@ function App() {
             {/* Calendar sidebar */}
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div className="scard">
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:CONFIG.accent,marginBottom:11}}>📅 Next 7 Days</div>
-                {upcoming.length===0&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#bba0bb",textAlign:"center",padding:"16px 0"}}>All clear! 🎉</div>}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:CONFIG.accent}}>📅 Upcoming</div>
+                  <div style={{display:"flex",gap:3}}>
+                    {[[0,"Today"],[3,"3 Days"],[7,"7 Days"]].map(([v,l])=>(
+                      <button key={v} className="bb" onClick={()=>setUpcomingFilter(v)} style={{padding:"3px 8px",fontSize:10,background:upcomingFilter===v?CONFIG.accent:"#d0e0f0",color:upcomingFilter===v?"#fff":"#5a7090"}}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                {upcoming.length===0&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#90a0b8",textAlign:"center",padding:"16px 0"}}>All clear! 🎉</div>}
                 {upcoming.map((x,i)=>{
                   const d=new Date(x.date+"T12:00:00");
                   const isOverdue=d<now;
-                  const c=x.kind==="appt"?apptColor(x.type):{bg:STATUS_COLORS[x.status]?.bg||"#f0daea",text:STATUS_COLORS[x.status]?.text||"#9b6090",border:"#f0daea"};
+                  const c=x.kind==="appt"?apptColor(x.type):{bg:STATUS_COLORS[x.status]?.bg||"#d0e0f0",text:STATUS_COLORS[x.status]?.text||"#5a7090",border:"#d0e0f0"};
                   return(
                     <div key={i} className="ui" onClick={()=>x.kind==="appt"?setSelAppt(x.obj):setSelLead(x.obj)}
                       style={{background:isOverdue?"#fff5f5":c.bg,border:`1.5px solid ${isOverdue?"#f5c4c4":c.border||c.bg}`}}>
                       <div style={{minWidth:34,textAlign:"center"}}>
                         <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,color:isOverdue?"#dc3545":CONFIG.accent,lineHeight:1}}>{d.getDate()}</div>
-                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:8,color:"#9b6090",letterSpacing:".04em"}}>{MONTHS[d.getMonth()].slice(0,3).toUpperCase()}</div>
-                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,color:"#bba0bb"}}>{fmtT(x.time)}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:8,color:"#5a7090",letterSpacing:".04em"}}>{MONTHS[d.getMonth()].slice(0,3).toUpperCase()}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,color:"#90a0b8"}}>{fmtT(x.time)}</div>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,fontWeight:700,color:"#2d1b2e",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.label}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,fontWeight:700,color:"#1e3a5f",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.label}</div>
                         <div style={{fontFamily:"'Lato',sans-serif",fontSize:10,color:c.text}}>{x.sub}</div>
                         {isOverdue&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:50,background:"#fde8e8",color:"#dc3545",fontFamily:"'Lato',sans-serif",fontWeight:700}}>OVERDUE</span>}
                       </div>
@@ -372,26 +401,105 @@ function App() {
           </div>
         )}
 
+        {/* ═══════════ WEEK VIEW TAB ═══════════ */}
+        {tab==="week"&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 255px",gap:16,alignItems:"start"}}>
+            <div className="card" style={{padding:14}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                <button className="bb" onClick={prevWeek} style={{background:"#eff6ff",color:CONFIG.accent,padding:"5px 13px",fontSize:16}}>‹</button>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,color:CONFIG.accent}}>
+                    {new Date(weekDates[0]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})} – {new Date(weekDates[6]+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+                  </div>
+                  <button className="bb" onClick={goThisWeek} style={{marginTop:4,padding:"2px 10px",fontSize:10,background:"#d0e0f0",color:CONFIG.accent}}>This Week</button>
+                </div>
+                <button className="bb" onClick={nextWeek} style={{background:"#eff6ff",color:CONFIG.accent,padding:"5px 13px",fontSize:16}}>›</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+                {weekDates.map((wd,i)=>{
+                  const d=new Date(wd+"T12:00:00");
+                  const isToday=wd===todayISO;
+                  const {leads:dl,appts:da}=itemsOnDay(wd);
+                  return(
+                    <div key={wd} style={{background:isToday?"#eff6ff":"#fafafa",borderRadius:10,padding:8,minHeight:140,cursor:"pointer",border:isToday?`2px solid ${CONFIG.accent}`:"1.5px solid #d0e0f0"}} onClick={()=>{setDayView(wd);setTab("day");}}>
+                      <div style={{textAlign:"center",marginBottom:6}}>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:10,fontWeight:700,color:"#5a7090",letterSpacing:".05em"}}>{DAYS_S[d.getDay()]}</div>
+                        <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:isToday?CONFIG.accent:"#1e3a5f"}}>{d.getDate()}</div>
+                      </div>
+                      <div style={{maxHeight:90,overflowY:"auto"}}>
+                        {da.slice(0,4).map(a=>{ const c=apptColor(a.type); return(
+                          <div key={a.id} onClick={e=>{e.stopPropagation();setSelAppt(a);}} style={{background:c.bg,color:c.text,borderRadius:4,padding:"2px 5px",marginBottom:3,fontSize:9,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>
+                            {fmtT(a.startTime)} {a.title}
+                          </div>
+                        );})}
+                        {dl.slice(0,2).map(l=>{ const sc=STATUS_COLORS[l.status]; return(
+                          <div key={l.id} onClick={e=>{e.stopPropagation();setSelLead(l);}} style={{background:sc?.bg,color:sc?.text,borderRadius:4,padding:"2px 5px",marginBottom:3,fontSize:9,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>
+                            📞 {l.name.split(" ")[0]}
+                          </div>
+                        );})}
+                        {(da.length>4||dl.length>2)&&<div style={{fontSize:8,color:"#5a7090",textAlign:"center"}}>+{Math.max(0,da.length-4)+Math.max(0,dl.length-2)} more</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div className="scard">
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:11}}>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:CONFIG.accent}}>📅 Upcoming</div>
+                  <div style={{display:"flex",gap:3}}>
+                    {[[0,"Today"],[3,"3 Days"],[7,"7 Days"]].map(([v,l])=>(
+                      <button key={v} className="bb" onClick={()=>setUpcomingFilter(v)} style={{padding:"3px 8px",fontSize:10,background:upcomingFilter===v?CONFIG.accent:"#d0e0f0",color:upcomingFilter===v?"#fff":"#5a7090"}}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                {upcoming.length===0&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#90a0b8",textAlign:"center",padding:"16px 0"}}>All clear! 🎉</div>}
+                {upcoming.map((x,i)=>{
+                  const d=new Date(x.date+"T12:00:00");
+                  const isOverdue=d<now;
+                  const c=x.kind==="appt"?apptColor(x.type):{bg:STATUS_COLORS[x.status]?.bg||"#d0e0f0",text:STATUS_COLORS[x.status]?.text||"#5a7090",border:"#d0e0f0"};
+                  return(
+                    <div key={i} className="ui" onClick={()=>x.kind==="appt"?setSelAppt(x.obj):setSelLead(x.obj)}
+                      style={{background:isOverdue?"#fff5f5":c.bg,border:`1.5px solid ${isOverdue?"#f5c4c4":c.border||c.bg}`}}>
+                      <div style={{minWidth:34,textAlign:"center"}}>
+                        <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,color:isOverdue?"#dc3545":CONFIG.accent,lineHeight:1}}>{d.getDate()}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:8,color:"#5a7090",letterSpacing:".04em"}}>{MONTHS[d.getMonth()].slice(0,3).toUpperCase()}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,color:"#90a0b8"}}>{fmtT(x.time)}</div>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,fontWeight:700,color:"#1e3a5f",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.label}</div>
+                        <div style={{fontFamily:"'Lato',sans-serif",fontSize:10,color:c.text}}>{x.sub}</div>
+                        {isOverdue&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:50,background:"#fde8e8",color:"#dc3545",fontFamily:"'Lato',sans-serif",fontWeight:700}}>OVERDUE</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ═══════════ DAY VIEW TAB ═══════════ */}
         {tab==="day"&&(
           <div style={{display:"grid",gridTemplateColumns:"1fr 255px",gap:16,alignItems:"start"}}>
-            <div style={{background:"#fff",borderRadius:16,boxShadow:`0 2px 16px ${CONFIG.accent}18`,border:"1.5px solid #f0daea",overflow:"hidden"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:"1.5px solid #f0daea",background:"#fdf4f9"}}>
-                <button className="bb" onClick={prevDay} style={{background:"#f0daea",color:CONFIG.accent,padding:"5px 12px",fontSize:15}}>‹</button>
+            <div style={{background:"#fff",borderRadius:16,boxShadow:`0 2px 16px ${CONFIG.accent}18`,border:"1.5px solid #d0e0f0",overflow:"hidden"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:"1.5px solid #d0e0f0",background:"#eff6ff"}}>
+                <button className="bb" onClick={prevDay} style={{background:"#d0e0f0",color:CONFIG.accent,padding:"5px 12px",fontSize:15}}>‹</button>
                 <div style={{textAlign:"center"}}>
                   <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,color:CONFIG.accent}}>
                     {dv===todayISO&&<span style={{fontSize:11,background:CONFIG.accent,color:"#fff",borderRadius:50,padding:"1px 8px",marginRight:7,fontFamily:"'Lato',sans-serif",verticalAlign:"middle"}}>TODAY</span>}
                     {dvDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
                   </div>
-                  <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#9b6090",marginTop:2}}>
+                  <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#5a7090",marginTop:2}}>
                     {dayApts.length} appointment{dayApts.length!==1?"s":""} · {dayLeads.length} follow-up{dayLeads.length!==1?"s":""}
                   </div>
                 </div>
-                <button className="bb" onClick={nextDay} style={{background:"#f0daea",color:CONFIG.accent,padding:"5px 12px",fontSize:15}}>›</button>
+                <button className="bb" onClick={nextDay} style={{background:"#d0e0f0",color:CONFIG.accent,padding:"5px 12px",fontSize:15}}>›</button>
               </div>
-              <div style={{padding:"9px 16px",borderBottom:"1.5px solid #f0daea",background:"#fdfafa",display:"flex",gap:8,flexWrap:"wrap"}}>
+              <div style={{padding:"9px 16px",borderBottom:"1.5px solid #d0e0f0",background:"#fafcff",display:"flex",gap:8,flexWrap:"wrap"}}>
                 <button className="bb" onClick={()=>openNewAppt(dv)} style={{background:`linear-gradient(135deg,${CONFIG.colorFrom},${CONFIG.colorTo})`,color:"#fff",padding:"7px 15px",fontSize:13}}>+ Add Appointment</button>
-                <button className="bb" onClick={()=>openNewLead(dv)} style={{background:"#fdf4f9",color:CONFIG.accent,padding:"7px 13px",fontSize:13,border:"1.5px solid #e0c8db"}}>+ Follow-Up Lead</button>
+                <button className="bb" onClick={()=>openNewLead(dv)} style={{background:"#eff6ff",color:CONFIG.accent,padding:"7px 13px",fontSize:13,border:"1.5px solid #c8d8e8"}}>+ Follow-Up Lead</button>
               </div>
               <div className="ds" ref={scrollRef}>
                 <div style={{position:"relative"}}>
@@ -438,8 +546,8 @@ function App() {
                     return(
                       <div key={l.id} onClick={()=>setSelLead(l)} style={{display:"flex",gap:8,padding:"8px 10px",borderRadius:8,background:sc.bg,marginBottom:5,cursor:"pointer",alignItems:"center"}}>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,fontWeight:700,color:"#2d1b2e",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name}</div>
-                          <div style={{fontFamily:"'Lato',sans-serif",fontSize:10,color:"#9b6090"}}>{l.phone} · {fmtT(l.followUpTime||"09:00")}</div>
+                          <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,fontWeight:700,color:"#1e3a5f",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name}</div>
+                          <div style={{fontFamily:"'Lato',sans-serif",fontSize:10,color:"#5a7090"}}>{l.phone} · {fmtT(l.followUpTime||"09:00")}</div>
                         </div>
                         {l.phone&&<a href={`tel:${l.phone.replace(/\D/g,"")}`} onClick={e=>e.stopPropagation()} style={{fontSize:16,textDecoration:"none"}}>📞</a>}
                       </div>
@@ -449,7 +557,7 @@ function App() {
               )}
               <div className="scard">
                 <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:CONFIG.accent,marginBottom:9}}>📋 Appointments</div>
-                {dayApts.length===0&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#bba0bb",textAlign:"center",padding:"12px 0"}}>No appointments yet<br/><span style={{fontSize:11}}>Click the timeline to add one</span></div>}
+                {dayApts.length===0&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#90a0b8",textAlign:"center",padding:"12px 0"}}>No appointments yet<br/><span style={{fontSize:11}}>Click the timeline to add one</span></div>}
                 {dayApts.map(a=>{ const c=apptColor(a.type); return(
                   <div key={a.id} onClick={()=>setSelAppt(a)} style={{display:"flex",gap:8,alignItems:"center",padding:"8px 10px",borderRadius:8,background:c.bg,border:`1.5px solid ${c.border}`,marginBottom:5,cursor:"pointer"}}>
                     <div style={{flex:1,minWidth:0}}>
@@ -462,7 +570,7 @@ function App() {
               <div className="scard">
                 <label className="lbl">Jump to Date</label>
                 <input type="date" className="inp" value={dv} onChange={e=>setDayView(e.target.value)}/>
-                <button className="bb" onClick={()=>setDayView(todayISO)} style={{width:"100%",marginTop:8,background:"#fdf4f9",color:CONFIG.accent,padding:"7px 0",fontSize:13,border:"1.5px solid #e0c8db"}}>Back to Today</button>
+                <button className="bb" onClick={()=>setDayView(todayISO)} style={{width:"100%",marginTop:8,background:"#eff6ff",color:CONFIG.accent,padding:"7px 0",fontSize:13,border:"1.5px solid #c8d8e8"}}>Back to Today</button>
               </div>
             </div>
           </div>
@@ -478,27 +586,27 @@ function App() {
                 {LEAD_STATUSES.map(s=><option key={s}>{s}</option>)}
               </select>
             </div>
-            {filtLeads.length===0&&<div style={{textAlign:"center",padding:"44px 0",fontFamily:"'Lato',sans-serif",color:"#bba0bb",fontSize:14}}>{leads.length===0?"No leads yet — click + New Lead to start!":"No leads match your search."}</div>}
+            {filtLeads.length===0&&<div style={{textAlign:"center",padding:"44px 0",fontFamily:"'Lato',sans-serif",color:"#90a0b8",fontSize:14}}>{leads.length===0?"No leads yet — click + New Lead to start!":"No leads match your search."}</div>}
             {filtLeads.map(l=>{
               const sc=STATUS_COLORS[l.status]||STATUS_COLORS["New Lead"];
-              const prev=parseFloat((l.prevPremium||"").replace(/[^0-9.]/g,""));
-              const quot=parseFloat((l.quotedPremium||"").replace(/[^0-9.]/g,""));
-              const savings=!isNaN(prev)&&!isNaN(quot)&&prev>quot?prev-quot:null;
+              const prevAnn=toAnnual(l.prevPremium,l.prevTerm);
+              const quotAnn=toAnnual(l.quotedPremium,l.quotedTerm);
+              const savings=!isNaN(prevAnn)&&!isNaN(quotAnn)&&prevAnn>quotAnn?prevAnn-quotAnn:null;
               return(
                 <div key={l.id} className="lr" onClick={()=>setSelLead(l)}>
                   <div style={{width:9,height:9,borderRadius:"50%",background:sc.dot,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-                      <span style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:"#2d1b2e"}}>{l.name}</span>
+                      <span style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:"#1e3a5f"}}>{l.name}</span>
                       <span style={{fontSize:10,padding:"2px 8px",borderRadius:50,background:sc.bg,color:sc.text,fontFamily:"'Lato',sans-serif",fontWeight:700}}>{l.status}</span>
                       {savings&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:50,background:"#d4edda",color:"#155724",fontFamily:"'Lato',sans-serif",fontWeight:700}}>💰 saves ${Math.round(savings).toLocaleString()}/yr</span>}
                     </div>
-                    <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#6e4a6e",marginTop:2}}>{l.phone}{l.company?` · ${l.company}`:""}{l.followUpDate?` · 📅 ${l.followUpDate}`:""}</div>
-                    {l.notes&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#9b6090",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.notes}</div>}
+                    <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#4a6a8a",marginTop:2}}>{l.phone}{l.company?` · ${l.company}`:""}{l.followUpDate?` · 📅 ${l.followUpDate}`:""}</div>
+                    {l.notes&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#5a7090",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.notes}</div>}
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
-                    {l.quotedPremium&&<div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:CONFIG.accent}}>{l.quotedPremium}</div>}
-                    {l.prevPremium&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#bba0bb",textDecoration:"line-through"}}>{l.prevPremium}</div>}
+                    {l.quotedPremium&&<div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:CONFIG.accent}}>{l.quotedPremium}<span style={{fontSize:9,fontWeight:400,color:"#5a7090",marginLeft:3}}>/{(l.quotedTerm||"Monthly").slice(0,2).toLowerCase()}</span></div>}
+                    {l.prevPremium&&<div style={{fontFamily:"'Lato',sans-serif",fontSize:11,color:"#90a0b8",textDecoration:"line-through"}}>{l.prevPremium}/{(l.prevTerm||"Monthly").slice(0,2).toLowerCase()}</div>}
                   </div>
                 </div>
               );
@@ -513,7 +621,7 @@ function App() {
           <div className="mo">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:700,color:CONFIG.accent}}>{editAId?"✏️ Edit Appointment":"📅 New Appointment"}</div>
-              <button className="bb" onClick={()=>setShowAF(false)} style={{background:"#f0daea",color:"#9b6090",padding:"4px 11px",fontSize:15}}>✕</button>
+              <button className="bb" onClick={()=>setShowAF(false)} style={{background:"#d0e0f0",color:"#5a7090",padding:"4px 11px",fontSize:15}}>✕</button>
             </div>
             {aErr&&<div style={{background:"#fde8e8",color:"#dc3545",borderRadius:8,padding:"8px 13px",marginBottom:13,fontFamily:"'Lato',sans-serif",fontSize:13}}>{aErr}</div>}
             <div><label className="lbl">Title *</label><input className="inp" placeholder="e.g. Call with John Smith" value={aForm.title} onChange={e=>setAForm(f=>({...f,title:e.target.value}))}/></div>
@@ -538,7 +646,7 @@ function App() {
             <div style={{marginTop:13}}><label className="lbl">Notes</label><textarea className="inp" placeholder="Notes for this appointment..." value={aForm.notes} onChange={e=>setAForm(f=>({...f,notes:e.target.value}))} rows={3} style={{resize:"vertical"}}/></div>
             <div style={{display:"flex",gap:10,marginTop:20}}>
               <button className="bb" onClick={saveAppt} style={{flex:1,background:`linear-gradient(135deg,${CONFIG.colorFrom},${CONFIG.colorTo})`,color:"#fff",padding:"11px 0",fontSize:14}}>{editAId?"Save Changes":"Add Appointment"}</button>
-              <button className="bb" onClick={()=>setShowAF(false)} style={{background:"#f0daea",color:"#9b6090",padding:"11px 18px",fontSize:14}}>Cancel</button>
+              <button className="bb" onClick={()=>setShowAF(false)} style={{background:"#d0e0f0",color:"#5a7090",padding:"11px 18px",fontSize:14}}>Cancel</button>
             </div>
           </div>
         </div>
@@ -549,8 +657,8 @@ function App() {
         <div className="mbg" onClick={e=>{if(e.target===e.currentTarget)setShowLF(false)}}>
           <div className="mo">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:700,color:CONFIG.accent}}>{editLId?"✏️ Edit Lead":"🌸 New Lead"}</div>
-              <button className="bb" onClick={()=>setShowLF(false)} style={{background:"#f0daea",color:"#9b6090",padding:"4px 11px",fontSize:15}}>✕</button>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:700,color:CONFIG.accent}}>{editLId?"✏️ Edit Lead":"🎯 New Lead"}</div>
+              <button className="bb" onClick={()=>setShowLF(false)} style={{background:"#d0e0f0",color:"#5a7090",padding:"4px 11px",fontSize:15}}>✕</button>
             </div>
             {lErr&&<div style={{background:"#fde8e8",color:"#dc3545",borderRadius:8,padding:"8px 13px",marginBottom:13,fontFamily:"'Lato',sans-serif",fontSize:13}}>{lErr}</div>}
             <div className="g2">
@@ -562,9 +670,23 @@ function App() {
                 {LEAD_STATUSES.map(s=><option key={s}>{s}</option>)}
               </select>
             </div>
-            <div className="g2" style={{marginTop:13}}>
-              <div><label className="lbl">Previous Premium</label><input className="inp" placeholder="$1,200" value={lForm.prevPremium} onChange={e=>setLForm(f=>({...f,prevPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,prevPremium:f}))}}/></div>
-              <div><label className="lbl">Quoted Premium</label><input className="inp" placeholder="$980" value={lForm.quotedPremium} onChange={e=>setLForm(f=>({...f,quotedPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,quotedPremium:f}))}}/></div>
+            <div style={{marginTop:13}}>
+              <label className="lbl">Current Premium</label>
+              <div style={{display:"flex",gap:8}}>
+                <input className="inp" placeholder="$1,200" value={lForm.prevPremium} onChange={e=>setLForm(f=>({...f,prevPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,prevPremium:f}))}} style={{flex:1}}/>
+                <select className="inp" value={lForm.prevTerm||"Monthly"} onChange={e=>setLForm(f=>({...f,prevTerm:e.target.value}))} style={{width:110}}>
+                  {PREMIUM_TERMS.map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{marginTop:13}}>
+              <label className="lbl">Quoted Premium</label>
+              <div style={{display:"flex",gap:8}}>
+                <input className="inp" placeholder="$980" value={lForm.quotedPremium} onChange={e=>setLForm(f=>({...f,quotedPremium:e.target.value}))} onBlur={e=>{const f=fmtCurrency(e.target.value);if(f)setLForm(v=>({...v,quotedPremium:f}))}} style={{flex:1}}/>
+                <select className="inp" value={lForm.quotedTerm||"Monthly"} onChange={e=>setLForm(f=>({...f,quotedTerm:e.target.value}))} style={{width:110}}>
+                  {PREMIUM_TERMS.map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{marginTop:13}}><label className="lbl">Quoted With</label>
               <select className="inp" value={lForm.company} onChange={e=>setLForm(f=>({...f,company:e.target.value}))}>
@@ -579,7 +701,7 @@ function App() {
             <div style={{marginTop:13}}><label className="lbl">Notes</label><textarea className="inp" placeholder="Notes about this customer..." value={lForm.notes} onChange={e=>setLForm(f=>({...f,notes:e.target.value}))} rows={3} style={{resize:"vertical"}}/></div>
             <div style={{display:"flex",gap:10,marginTop:20}}>
               <button className="bb" onClick={saveLead} style={{flex:1,background:`linear-gradient(135deg,${CONFIG.colorFrom},${CONFIG.colorTo})`,color:"#fff",padding:"11px 0",fontSize:14}}>{editLId?"Save Changes":"Add Lead"}</button>
-              <button className="bb" onClick={()=>setShowLF(false)} style={{background:"#f0daea",color:"#9b6090",padding:"11px 18px",fontSize:14}}>Cancel</button>
+              <button className="bb" onClick={()=>setShowLF(false)} style={{background:"#d0e0f0",color:"#5a7090",padding:"11px 18px",fontSize:14}}>Cancel</button>
             </div>
           </div>
         </div>
@@ -594,16 +716,16 @@ function App() {
             <div className="mo">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:15}}>
                 <div>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:21,fontWeight:700,color:"#2d1b2e"}}>{a.title}</div>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:21,fontWeight:700,color:"#1e3a5f"}}>{a.title}</div>
                   <span style={{fontSize:11,padding:"3px 10px",borderRadius:50,background:c.bg,color:c.text,border:`1.5px solid ${c.border}`,fontFamily:"'Lato',sans-serif",fontWeight:700,display:"inline-block",marginTop:5}}>{a.type}</span>
                 </div>
-                <button className="bb" onClick={()=>setSelAppt(null)} style={{background:"#f0daea",color:"#9b6090",padding:"4px 11px",fontSize:15,flexShrink:0}}>✕</button>
+                <button className="bb" onClick={()=>setSelAppt(null)} style={{background:"#d0e0f0",color:"#5a7090",padding:"4px 11px",fontSize:15,flexShrink:0}}>✕</button>
               </div>
               <div className="g2" style={{marginBottom:13}}>
                 {[{l:"Date",v:new Date(a.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})},{l:"Time",v:`${fmtT(a.startTime)} – ${fmtT(a.endTime)}`}].map(x=>(
-                  <div key={x.l} style={{background:"#fdf4f9",borderRadius:10,padding:"10px 13px"}}>
-                    <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#9b6090",marginBottom:3}}>{x.l}</div>
-                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,color:"#2d1b2e"}}>{x.v}</div>
+                  <div key={x.l} style={{background:"#eff6ff",borderRadius:10,padding:"10px 13px"}}>
+                    <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#5a7090",marginBottom:3}}>{x.l}</div>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,color:"#1e3a5f"}}>{x.v}</div>
                   </div>
                 ))}
               </div>
@@ -612,11 +734,11 @@ function App() {
                   <span style={{fontSize:18}}>👤</span>
                   <div>
                     <div style={{fontFamily:"'Lato',sans-serif",fontSize:11,fontWeight:700,color:"#1a6fa8"}}>Linked Customer</div>
-                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:"#2d1b2e"}}>{linked.name} · {linked.phone}</div>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:"#1e3a5f"}}>{linked.name} · {linked.phone}</div>
                   </div>
                 </div>
               )}
-              {a.notes&&<div style={{background:"#fdf4f9",borderRadius:10,padding:"11px 13px",marginBottom:13}}><div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#9b6090",marginBottom:4}}>Notes</div><div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#2d1b2e",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.notes}</div></div>}
+              {a.notes&&<div style={{background:"#eff6ff",borderRadius:10,padding:"11px 13px",marginBottom:13}}><div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#5a7090",marginBottom:4}}>Notes</div><div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#1e3a5f",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.notes}</div></div>}
               <div style={{display:"flex",gap:10}}>
                 <button className="bb" onClick={()=>openEditAppt(a)} style={{flex:1,background:`linear-gradient(135deg,${CONFIG.colorFrom},${CONFIG.colorTo})`,color:"#fff",padding:"10px 0",fontSize:13}}>✏️ Edit</button>
                 <button className="bb" onClick={()=>delAppt(a.id)} style={{background:"#fde8e8",color:"#dc3545",padding:"10px 13px",fontSize:13}}>🗑 Remove</button>
@@ -629,27 +751,27 @@ function App() {
       {/* ═══ LEAD DETAIL ═══ */}
       {selLead&&(()=>{
         const l=selLead, sc=STATUS_COLORS[l.status]||STATUS_COLORS["New Lead"];
-        const prev=parseFloat((l.prevPremium||"").replace(/[^0-9.]/g,""));
-        const quot=parseFloat((l.quotedPremium||"").replace(/[^0-9.]/g,""));
-        const savings=!isNaN(prev)&&!isNaN(quot)&&prev>quot?prev-quot:null;
+        const prevAnn=toAnnual(l.prevPremium,l.prevTerm);
+        const quotAnn=toAnnual(l.quotedPremium,l.quotedTerm);
+        const savings=!isNaN(prevAnn)&&!isNaN(quotAnn)&&prevAnn>quotAnn?prevAnn-quotAnn:null;
         return(
           <div className="mbg" onClick={e=>{if(e.target===e.currentTarget)setSelLead(null)}}>
             <div className="mo">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:15}}>
                 <div>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:21,fontWeight:700,color:"#2d1b2e"}}>{l.name}</div>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:21,fontWeight:700,color:"#1e3a5f"}}>{l.name}</div>
                   <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap"}}>
                     <span style={{fontSize:11,padding:"3px 10px",borderRadius:50,background:sc.bg,color:sc.text,fontFamily:"'Lato',sans-serif",fontWeight:700}}>{l.status}</span>
                     {l.company&&<span style={{fontSize:11,padding:"3px 10px",borderRadius:50,background:"#e8f4fd",color:"#1a6fa8",fontFamily:"'Lato',sans-serif",fontWeight:700}}>{l.company}</span>}
                   </div>
                 </div>
-                <button className="bb" onClick={()=>setSelLead(null)} style={{background:"#f0daea",color:"#9b6090",padding:"4px 11px",fontSize:15,flexShrink:0}}>✕</button>
+                <button className="bb" onClick={()=>setSelLead(null)} style={{background:"#d0e0f0",color:"#5a7090",padding:"4px 11px",fontSize:15,flexShrink:0}}>✕</button>
               </div>
               <div className="g2" style={{marginBottom:13}}>
-                {[{l:"Phone",v:l.phone||"—"},{l:"Follow-Up",v:l.followUpDate?`${l.followUpDate} · ${fmtT(l.followUpTime||"09:00")}`:"Not set"},{l:"Previous Premium",v:l.prevPremium||"—"},{l:"Quoted Premium",v:l.quotedPremium||"—"}].map(x=>(
-                  <div key={x.l} style={{background:"#fdf4f9",borderRadius:10,padding:"10px 13px"}}>
-                    <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#9b6090",marginBottom:3}}>{x.l}</div>
-                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,color:"#2d1b2e"}}>{x.v}</div>
+                {[{l:"Phone",v:l.phone||"—"},{l:"Follow-Up",v:l.followUpDate?`${l.followUpDate} · ${fmtT(l.followUpTime||"09:00")}`:"Not set"},{l:"Current Premium",v:l.prevPremium?`${l.prevPremium} (${l.prevTerm||"Monthly"})`:"—"},{l:"Quoted Premium",v:l.quotedPremium?`${l.quotedPremium} (${l.quotedTerm||"Monthly"})`:"—"}].map(x=>(
+                  <div key={x.l} style={{background:"#eff6ff",borderRadius:10,padding:"10px 13px"}}>
+                    <div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#5a7090",marginBottom:3}}>{x.l}</div>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,color:"#1e3a5f"}}>{x.v}</div>
                   </div>
                 ))}
               </div>
@@ -662,7 +784,7 @@ function App() {
                   </div>
                 </div>
               )}
-              {l.notes&&<div style={{background:"#fdf4f9",borderRadius:10,padding:"11px 13px",marginBottom:13}}><div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#9b6090",marginBottom:4}}>Notes</div><div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#2d1b2e",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{l.notes}</div></div>}
+              {l.notes&&<div style={{background:"#eff6ff",borderRadius:10,padding:"11px 13px",marginBottom:13}}><div style={{fontFamily:"'Lato',sans-serif",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"#5a7090",marginBottom:4}}>Notes</div><div style={{fontFamily:"'Lato',sans-serif",fontSize:13,color:"#1e3a5f",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{l.notes}</div></div>}
               <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                 <button className="bb" onClick={()=>openEditLead(l)} style={{flex:1,background:`linear-gradient(135deg,${CONFIG.colorFrom},${CONFIG.colorTo})`,color:"#fff",padding:"10px 0",fontSize:13}}>✏️ Edit</button>
                 {l.phone&&<a href={`tel:${l.phone.replace(/\D/g,"")}`} className="bb" style={{background:"#e8f4fd",color:"#1a6fa8",padding:"10px 14px",fontSize:13,textDecoration:"none",display:"inline-flex",alignItems:"center"}}>📞 Call</a>}
