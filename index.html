@@ -287,26 +287,37 @@ function SalesHub({ agent, onLogout }) {
   const [weekStart, setWeekStart] = useState(()=>{ const d=new Date(); d.setDate(d.getDate()-d.getDay()); return iso(d.getFullYear(),d.getMonth(),d.getDate()); });
   const [alertItem, setAlertItem] = useState(null);
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
+  const [saveEnabled, setSaveEnabled] = useState(false);
   const scrollRef = useRef(null);
   const now = new Date();
   const todayISO = iso(now.getFullYear(), now.getMonth(), now.getDate());
 
   const loadData = useCallback(() => {
+    setSaveEnabled(false);
     const agentKey = CONFIG.agentKey;
-    fetch(`/api/leads?agent=${agentKey}`).then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setLeads(d); setLoaded(true); }).catch(()=>setLoaded(true));
-    fetch(`/api/appts?agent=${agentKey}`).then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setAppts(d); }).catch(()=>{});
+    Promise.all([
+      fetch(`/api/leads?agent=${agentKey}`).then(r=>r.json()),
+      fetch(`/api/appts?agent=${agentKey}`).then(r=>r.json())
+    ]).then(([leadsData, apptsData]) => {
+      if(Array.isArray(leadsData)) setLeads(leadsData);
+      if(Array.isArray(apptsData)) setAppts(apptsData);
+      setLoaded(true);
+      setTimeout(() => setSaveEnabled(true), 100);
+    }).catch(() => {
+      setLoaded(true);
+      setTimeout(() => setSaveEnabled(true), 100);
+    });
   }, []);
 
   useEffect(()=>{
     loadData();
-    // Refresh when window regains focus
     const onFocus = () => loadData();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   },[loadData]);
 
-  useEffect(()=>{ if(!loaded) return; const t = setTimeout(()=>{ fetch(`/api/leads?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[leads, loaded]);
-  useEffect(()=>{ if(!loaded) return; const t = setTimeout(()=>{ fetch(`/api/appts?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appts})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[appts, loaded]);
+  useEffect(()=>{ if(!saveEnabled) return; const t = setTimeout(()=>{ fetch(`/api/leads?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[leads, saveEnabled]);
+  useEffect(()=>{ if(!saveEnabled) return; const t = setTimeout(()=>{ fetch(`/api/appts?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appts})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[appts, saveEnabled]);
 
   useEffect(()=>{
     const checkAlerts = () => {
