@@ -291,11 +291,19 @@ function SalesHub({ agent, onLogout }) {
   const now = new Date();
   const todayISO = iso(now.getFullYear(), now.getMonth(), now.getDate());
 
-  useEffect(()=>{
+  const loadData = useCallback(() => {
     const agentKey = CONFIG.agentKey;
     fetch(`/api/leads?agent=${agentKey}`).then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setLeads(d); setLoaded(true); }).catch(()=>setLoaded(true));
     fetch(`/api/appts?agent=${agentKey}`).then(r=>r.json()).then(d=>{ if(Array.isArray(d)) setAppts(d); }).catch(()=>{});
-  },[]);
+  }, []);
+
+  useEffect(()=>{
+    loadData();
+    // Refresh when window regains focus
+    const onFocus = () => loadData();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  },[loadData]);
 
   useEffect(()=>{ if(!loaded) return; const t = setTimeout(()=>{ fetch(`/api/leads?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[leads, loaded]);
   useEffect(()=>{ if(!loaded) return; const t = setTimeout(()=>{ fetch(`/api/appts?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appts})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[appts, loaded]);
@@ -437,6 +445,7 @@ function SalesHub({ agent, onLogout }) {
             <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
               <button className="bb" onClick={()=>openNewAppt(todayISO)} style={{background:"#ffffff30",color:"#fff",padding:"8px 15px",fontSize:13,border:"1.5px solid #ffffff55"}}>+ Appointment</button>
               <button className="bb" onClick={()=>openNewLead()} style={{background:"#fff",color:CONFIG.accent,padding:"8px 15px",fontSize:13}}>+ New Lead</button>
+              <button className="bb" onClick={loadData} style={{background:"#ffffff20",color:"#fff",padding:"8px 10px",fontSize:12,border:"1.5px solid #ffffff44"}} title="Refresh data">↻</button>
               <button className="bb" onClick={onLogout} style={{background:"#ffffff20",color:"#fff",padding:"8px 12px",fontSize:12,border:"1.5px solid #ffffff44"}}>Logout</button>
             </div>
           </div>
