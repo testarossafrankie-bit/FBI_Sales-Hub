@@ -288,6 +288,7 @@ function SalesHub({ agent, onLogout }) {
   const [alertItem, setAlertItem] = useState(null);
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
   const [saveEnabled, setSaveEnabled] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
   const scrollRef = useRef(null);
   const now = new Date();
   const todayISO = iso(now.getFullYear(), now.getMonth(), now.getDate());
@@ -318,8 +319,9 @@ function SalesHub({ agent, onLogout }) {
     return () => window.removeEventListener("focus", onFocus);
   },[loadData, showAF, showLF, selAppt, selLead]);
 
-  useEffect(()=>{ if(!saveEnabled) return; const t = setTimeout(()=>{ fetch(`/api/leads?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[leads, saveEnabled]);
-  useEffect(()=>{ if(!saveEnabled) return; const t = setTimeout(()=>{ fetch(`/api/appts?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appts})}).catch(()=>{}); }, 600); return ()=>clearTimeout(t); },[appts, saveEnabled]);
+  useEffect(()=>{ if(!saveEnabled) return; setSaveStatus("saving"); const t = setTimeout(()=>{ fetch(`/api/leads?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leads})}).then(r=>{if(r.ok)setSaveStatus("saved");else setSaveStatus("error");}).catch(()=>setSaveStatus("error")); }, 600); return ()=>clearTimeout(t); },[leads, saveEnabled]);
+  useEffect(()=>{ if(!saveEnabled) return; setSaveStatus("saving"); const t = setTimeout(()=>{ fetch(`/api/appts?agent=${CONFIG.agentKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appts})}).then(r=>{if(r.ok)setSaveStatus("saved");else setSaveStatus("error");}).catch(()=>setSaveStatus("error")); }, 600); return ()=>clearTimeout(t); },[appts, saveEnabled]);
+  useEffect(()=>{ if(saveStatus==="saved"){const t=setTimeout(()=>setSaveStatus(null),2000);return()=>clearTimeout(t);} },[saveStatus]);
 
   useEffect(()=>{
     const checkAlerts = () => {
@@ -453,7 +455,7 @@ function SalesHub({ agent, onLogout }) {
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
             <div>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#fff"}}>{CONFIG.agentName}'s Sales Hub</div>
-              <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#ffffff99",marginTop:2}}>{CONFIG.company} · {now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
+              <div style={{fontFamily:"'Lato',sans-serif",fontSize:12,color:"#ffffff99",marginTop:2}}>{CONFIG.company} · {now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} {saveStatus&&<span style={{marginLeft:8,padding:"2px 8px",borderRadius:50,fontSize:10,background:saveStatus==="saving"?"#ffffff44":saveStatus==="saved"?"#28a74588":"#dc354588",color:"#fff"}}>{saveStatus==="saving"?"Saving...":saveStatus==="saved"?"Saved ✓":"Save failed!"}</span>}</div>
             </div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
               <button className="bb" onClick={()=>openNewAppt(todayISO)} style={{background:"#ffffff30",color:"#fff",padding:"8px 15px",fontSize:13,border:"1.5px solid #ffffff55"}}>+ Appointment</button>
